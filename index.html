@@ -1,0 +1,410 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1920, initial-scale=1.0" />
+<title>大富股市</title>
+<style>
+:root{
+  --bg:#06090f;
+  --panel:#0b0f18;
+  --head:#0e1424;
+  --text:#e6ecff;
+  --muted:#8ea0c7;
+  --up:#ff3b3b;   /* 紅漲 */
+  --down:#39ff72; /* 綠跌 */
+  --gold:#bc8844;
+  --line:#1a2134;
+}
+*{box-sizing:border-box;user-select:none;}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font:13px/1.35 "Segoe UI",Roboto,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;}
+.stage{width:1920px;height:1080px;margin:0 auto;overflow:hidden;}
+
+.topbar{height:56px;display:flex;align-items:center;padding:0 10px;
+  background:linear-gradient(180deg,#0c111c,#070b12);border-bottom:1px solid var(--line);}
+.brand{background:var(--gold);color:#111;font-weight:800;font-size:18px;padding:6px 12px;border-radius:4px;margin-right:12px;}
+.menus{display:flex;gap:2px;flex-wrap:wrap;}
+.menus a{text-decoration:none;color:#cdd8ff;padding:8px 10px;border-radius:4px;}
+.menus a:hover,.menus a.active{background:#172036;color:#fff;}
+
+.main{display:grid;grid-template-rows:1fr 1fr;gap:8px;height:calc(1080px - 56px);padding:8px;}
+
+/* 上半：左2/3清單 + 右1/3大盤 */
+.topRow{display:grid;grid-template-columns:2fr 1fr;gap:8px;min-height:0;}
+/* 下半：左個股 中五檔 右逐筆 */
+.bottomRow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;min-height:0;}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;overflow:hidden;min-height:0;}
+.p-head{height:34px;display:flex;align-items:center;padding:0 10px;background:var(--head);
+  border-bottom:1px solid var(--line);color:#b8c7f0;font-weight:600;}
+.p-head .r{margin-left:auto;color:var(--muted);}
+.inner{height:calc(100% - 34px);min-height:0;}
+
+/* 清單表格 */
+.table-wrap{height:100%;overflow:auto;}
+table{width:100%;border-collapse:collapse;table-layout:fixed;}
+thead th{position:sticky;top:0;background:#0c1120;color:#94a9d8;font-size:12px;
+  border-bottom:1px solid var(--line);padding:6px 8px;text-align:right;}
+thead th:first-child,tbody td:first-child{text-align:left;}
+tbody td{padding:4px 8px;border-bottom:1px solid #101625;text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+tbody tr{cursor:pointer;} tbody tr:hover{background:#0e1426;}
+.badge{padding:1px 5px;border-radius:3px;background:#1e2a47;color:#cfe1ff;font-size:11px;margin-left:6px;}
+.up{color:var(--up);} .down{color:var(--down);}
+
+/* 圖表 + 報價條 */
+.canvas{width:100%;height:calc(100% - 64px);display:block;}
+.quote-bar{display:flex;gap:16px;padding:8px 10px;border-top:1px solid var(--line);background:#0c1120;height:64px;align-items:center;color:#cdd8ff;}
+.qi{font-size:13px;} .qi .v{font-weight:800;font-size:20px;margin-left:6px;}
+.chip{padding:2px 6px;border-radius:4px;background:#172036;margin-left:6px;}
+
+/* 五檔 */
+.levels{display:grid;grid-template-columns:1fr 110px 110px 1fr;gap:6px;padding:10px;height:100%;overflow:auto;}
+.cell{background:#0e1529;padding:6px 8px;border-radius:4px;border:1px solid var(--line);text-align:right;}
+.side{text-align:left;color:#9bb0e2;}
+.bar{height:8px;background:#14203a;border-radius:4px;overflow:hidden;}
+.bar > i{display:block;height:100%;background:#294387;}
+
+/* 逐筆 */
+.tape{padding:8px 10px;overflow:auto;height:100%;}
+.trow{display:grid;grid-template-columns:100px 1fr 1fr 1fr;gap:10px;padding:6px 0;border-bottom:1px dashed #14203a;font-variant-numeric:tabular-nums;}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="topbar">
+    <div class="brand">大富股市</div>
+    <nav class="menus">
+      <a class="active" href="#">大盤</a>
+      <a href="#">國際金融</a>
+      <a href="#">證券行情</a>
+      <a href="#">綜合報價</a>
+      <a href="#">期權行情</a>
+      <a href="#">權證資訊</a>
+      <a href="#">申購競拍</a>
+      <a href="#">市場動態</a>
+      <a href="#">個人設定</a>
+      <a href="#">個股盤後</a>
+    </nav>
+  </div>
+
+  <div class="main">
+    <!-- 上半 -->
+    <div class="topRow">
+      <!-- 左2/3 清單 -->
+      <section class="panel">
+        <div class="p-head">美股觀察清單<div class="r">點選切換個股</div></div>
+        <div class="inner table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:42%">名稱 / 代號</th>
+                <th style="width:12%">買進</th>
+                <th style="width:12%">賣出</th>
+                <th style="width:12%">成交</th>
+                <th style="width:12%">漲跌</th>
+                <th style="width:10%">量</th>
+              </tr>
+            </thead>
+            <tbody id="stockBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <!-- 右1/3 大盤走勢（移除「模擬時間」「(模擬)」） -->
+      <section class="panel">
+        <div class="p-head">美股大盤走勢</div>
+        <div class="inner">
+          <canvas id="marketCanvas" class="canvas"></canvas>
+          <div class="quote-bar">
+            <div class="qi">指數 <span class="v" id="mIdx">--</span></div>
+            <div class="qi">漲跌 <span class="v" id="mChg">--</span> <span class="chip" id="mPct">--</span></div>
+            <div class="qi">最高 <span class="v" id="mHi">--</span></div>
+            <div class="qi">最低 <span class="v" id="mLo">--</span></div>
+            <div class="qi">量 <span class="v" id="mVol">--</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- 下半 -->
+    <div class="bottomRow">
+      <!-- 左：個股走勢 -->
+      <section class="panel">
+        <div class="p-head">個股走勢圖 <div class="r" id="curSym">--</div></div>
+        <div class="inner">
+          <canvas id="stockCanvas" class="canvas"></canvas>
+          <div class="quote-bar">
+            <div class="qi">成交 <span class="v" id="qLast">--</span></div>
+            <div class="qi">漲跌 <span class="v" id="qChg">--</span> <span class="chip" id="qPct">--</span></div>
+            <div class="qi">最高 <span class="v" id="qHi">--</span></div>
+            <div class="qi">最低 <span class="v" id="qLo">--</span></div>
+            <div class="qi">量 <span class="v" id="qVol">--</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 中：五檔 -->
+      <section class="panel">
+        <div class="p-head">五檔報價</div>
+        <div class="inner levels" id="orderLevels"></div>
+      </section>
+
+      <!-- 右：逐筆 -->
+      <section class="panel">
+        <div class="p-head">逐筆成交</div>
+        <div class="inner tape" id="tape"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== 資料模型 ======
+const symbols = [
+  {sym:"AAPL", name:"Apple Inc."},{sym:"MSFT", name:"Microsoft"},
+  {sym:"GOOGL", name:"Alphabet Class A"},{sym:"AMZN", name:"Amazon.com"},
+  {sym:"NVDA", name:"NVIDIA"},{sym:"META", name:"Meta Platforms"},
+  {sym:"TSLA", name:"Tesla"},{sym:"BRK.B", name:"Berkshire Hathaway B"},
+  {sym:"JPM", name:"JPMorgan Chase"},{sym:"V", name:"Visa"},
+  {sym:"NFLX", name:"Netflix"},{sym:"AMD", name:"Advanced Micro Devices"},
+  {sym:"INTC", name:"Intel"},{sym:"BA", name:"Boeing"},
+  {sym:"DIS", name:"Walt Disney"},{sym:"PYPL", name:"PayPal Holdings"},
+  {sym:"KO", name:"Coca-Cola"},{sym:"PEP", name:"PepsiCo"},
+  {sym:"WMT", name:"Walmart"},{sym:"NKE", name:"NIKE"},
+  {sym:"ADBE", name:"Adobe"},{sym:"CRM", name:"Salesforce"},
+  {sym:"ORCL", name:"Oracle"},{sym:"CSCO", name:"Cisco"},
+  {sym:"AVGO", name:"Broadcom"},{sym:"COST", name:"Costco"},
+  {sym:"QCOM", name:"Qualcomm"},{sym:"SBUX", name:"Starbucks"},
+  {sym:"SHOP", name:"Shopify"},{sym:"UBER", name:"Uber"},
+  {sym:"LYFT", name:"Lyft"},{sym:"BABA", name:"Alibaba"},
+  {sym:"T", name:"AT&T"},{sym:"XOM", name:"Exxon Mobil"},
+  {sym:"CVX", name:"Chevron"},{sym:"PFE", name:"Pfizer"},
+  {sym:"MRK", name:"Merck"},{sym:"ABNB", name:"Airbnb"},
+  {sym:"SNOW", name:"Snowflake"},{sym:"PLTR", name:"Palantir"}
+];
+const state = {};
+for (const s of symbols){
+  const base = 30 + Math.random()*470;
+  state[s.sym] = {
+    last: +base.toFixed(2),
+    bid: +(base-0.15).toFixed(2),
+    ask: +(base+0.15).toFixed(2),
+    change: 0, changePct: 0,
+    high: base, low: base, vol: 0,
+    history: Array.from({length:420}, (_,i)=>base + Math.sin(i/18)*0.8 + (Math.random()-0.5)*0.4),
+  };
+}
+// 大盤指數（合成）
+const market = {
+  idx: 16000 + Math.random()*6000, hi: 0, lo: 1e9, vol: 0, change:0, changePct:0,
+  history: Array.from({length:420}, (_,i)=>16000 + Math.sin(i/20)*80 + (Math.random()-0.5)*40)
+};
+market.hi = Math.max(...market.history); market.lo = Math.min(...market.history);
+
+let currentSym = "AAPL";
+const $ = id => document.getElementById(id);
+
+// ====== UI 建構 ======
+function renderTable(){
+  const tbody = $("stockBody");
+  tbody.innerHTML = "";
+  for (const s of symbols){
+    const st = state[s.sym];
+    const tr = document.createElement("tr");
+    tr.dataset.sym = s.sym;
+    tr.innerHTML = `
+      <td>${s.name} <span class="badge">${s.sym}</span></td>
+      <td>${st.bid.toFixed(2)}</td>
+      <td>${st.ask.toFixed(2)}</td>
+      <td class="${st.change>=0?'up':'down'}">${st.last.toFixed(2)}</td>
+      <td class="${st.change>=0?'up':'down'}">${st.change>=0?'+':''}${st.change.toFixed(2)} (${(st.changePct*100).toFixed(2)}%)</td>
+      <td>${st.vol.toLocaleString()}</td>
+    `;
+    tr.onclick = ()=>selectSymbol(s.sym);
+    tbody.appendChild(tr);
+  }
+}
+function updateRow(sym){
+  const rows = Array.from($("stockBody").children);
+  const st = state[sym];
+  for (const tr of rows){
+    if (tr.dataset.sym === sym){
+      tr.children[1].textContent = st.bid.toFixed(2);
+      tr.children[2].textContent = st.ask.toFixed(2);
+      tr.children[3].textContent = st.last.toFixed(2);
+      tr.children[4].textContent = `${st.change>=0?'+':''}${st.change.toFixed(2)} (${(st.changePct*100).toFixed(2)}%)`;
+      tr.children[3].className = st.change>=0?'up':'down';
+      tr.children[4].className = st.change>=0?'up':'down';
+      tr.children[5].textContent = st.vol.toLocaleString();
+      break;
+    }
+  }
+}
+
+// 五檔
+function renderBook(sym){
+  const wrap = $("orderLevels");
+  wrap.innerHTML = `
+    <div class="cell side">買進檔</div><div class="cell side">張數</div>
+    <div class="cell side">價格</div><div class="cell side">賣出檔</div>`;
+  const st = state[sym];
+  const center = st.last;
+  for (let i=5;i>=1;i--){
+    const price = +(center - 0.02*i*(1+Math.random()*2)).toFixed(2);
+    const qty = Math.floor(80+Math.random()*1200);
+    wrap.insertAdjacentHTML("beforeend",`
+      <div class="cell side">買${i}</div>
+      <div class="cell"><div class="bar"><i style="width:${Math.min(100, qty/12)}%"></i></div> ${qty}</div>
+      <div class="cell up">${price.toFixed(2)}</div>
+      <div class="cell"></div>`);
+  }
+  for (let i=1;i<=5;i++){
+    const price = +(center + 0.02*i*(1+Math.random()*2)).toFixed(2);
+    const qty = Math.floor(80+Math.random()*1200);
+    wrap.insertAdjacentHTML("beforeend",`
+      <div class="cell"></div>
+      <div class="cell"><div class="bar"><i style="width:${Math.min(100, qty/12)}%"></i></div> ${qty}</div>
+      <div class="cell down">${price.toFixed(2)}</div>
+      <div class="cell side">賣${i}</div>`);
+  }
+}
+
+// 逐筆
+function pushTape(sym, price, qty){
+  const t = $("tape");
+  const up = Math.random()>0.5;
+  const row = document.createElement("div");
+  row.className = "trow";
+  row.innerHTML = `
+    <div>${new Date().toLocaleTimeString('zh-TW',{hour12:false})}</div>
+    <div class="${up?'up':'down'}">${price.toFixed(2)}</div>
+    <div>${qty}</div>
+    <div class="${up?'up':'down'}">${up?'+':'-'}${(Math.random()*0.35).toFixed(2)}%</div>`;
+  t.prepend(row);
+  while (t.children.length>28) t.removeChild(t.lastChild);
+}
+
+// ====== Canvas 繪圖 ======
+function setupHiDPI(cvs){
+  const ratio = window.devicePixelRatio||1;
+  const w = cvs.clientWidth, h = cvs.clientHeight;
+  cvs.width = Math.max(1, Math.floor(w*ratio));
+  cvs.height = Math.max(1, Math.floor(h*ratio));
+  const ctx = cvs.getContext("2d");
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  return ctx;
+}
+function drawLine(cvs, series, color){
+  const ctx = setupHiDPI(cvs);
+  const w = cvs.clientWidth, h = cvs.clientHeight;
+  // grid
+  ctx.strokeStyle = "#1a2134"; ctx.lineWidth = 1;
+  for(let i=0;i<=5;i++){const y=i*h/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  for(let i=0;i<=10;i++){const x=i*w/10;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  // scale
+  const min = Math.min(...series), max = Math.max(...series), span=(max-min)||1;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i=0;i<series.length;i++){
+    const x = i*(w/(series.length-1));
+    const y = h - ((series[i]-min)/span)*h;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.strokeStyle = color; ctx.stroke();
+  // last tag
+  const last = series[series.length-1];
+  const y = h - ((last-min)/span)*h;
+  ctx.fillStyle="#0c1120"; ctx.fillRect(w-86,y-12,86,24);
+  ctx.fillStyle="#cfe1ff"; ctx.font="12px sans-serif"; ctx.fillText(last.toFixed(2), w-80, y+5);
+}
+
+// ====== 選股 ======
+function selectSymbol(sym){
+  currentSym = sym;
+  document.getElementById("curSym").textContent = sym;
+  renderBook(sym);
+  updateQuoteBar();
+  drawStockChart();
+}
+
+// ====== 圖表與報價列 ======
+const mktCanvas = document.getElementById("marketCanvas");
+const stkCanvas = document.getElementById("stockCanvas");
+function drawMarket(){ drawLine(mktCanvas, market.history, "#ff3b3b"); }
+function drawStockChart(){
+  const st = state[currentSym];
+  drawLine(stkCanvas, st.history, st.change>=0 ? "#ff3b3b" : "#39ff72");
+}
+function updateQuoteBar(){
+  const st = state[currentSym];
+  document.getElementById("qLast").textContent = st.last.toFixed(2);
+  document.getElementById("qChg").textContent  = `${st.change>=0?'+':''}${st.change.toFixed(2)}`;
+  document.getElementById("qChg").className = "v " + (st.change>=0?'up':'down');
+  document.getElementById("qPct").textContent = `${(st.changePct*100).toFixed(2)}%`;
+  document.getElementById("qHi").textContent = st.high.toFixed(2);
+  document.getElementById("qLo").textContent = st.low.toFixed(2);
+  document.getElementById("qVol").textContent = st.vol.toLocaleString();
+}
+
+// ====== 更新循環 ======
+function tick(){
+  // 市場指數
+  const driftM = (Math.random()-0.5)*15;
+  market.idx += driftM;
+  market.history.push(market.idx + (Math.random()-0.5)*5);
+  if (market.history.length>420) market.history.shift();
+  market.hi = Math.max(market.hi, market.idx);
+  market.lo = Math.min(market.lo, market.idx);
+  const openM = market.history[Math.max(0, market.history.length-300)];
+  market.change = +(market.idx - openM).toFixed(2);
+  market.changePct = market.change / openM;
+  market.vol += Math.floor(10000 + Math.random()*50000);
+  // 市場 quote
+  document.getElementById("mIdx").textContent = market.idx.toFixed(2);
+  document.getElementById("mChg").textContent = `${market.change>=0?'+':''}${market.change.toFixed(2)}`;
+  document.getElementById("mChg").className = "v " + (market.change>=0?'up':'down');
+  document.getElementById("mPct").textContent = `${(market.changePct*100).toFixed(2)}%`;
+  document.getElementById("mHi").textContent = market.hi.toFixed(2);
+  document.getElementById("mLo").textContent = market.lo.toFixed(2);
+  document.getElementById("mVol").textContent = market.vol.toLocaleString();
+
+  // 個股
+  for (const s of symbols){
+    const st = state[s.sym];
+    const d = (Math.random()-0.5)*0.9;
+    st.last = +(st.last + d).toFixed(2);
+    st.bid = +(st.last - (0.08+Math.random()*0.08)).toFixed(2);
+    st.ask = +(st.last + (0.08+Math.random()*0.08)).toFixed(2);
+    st.high = Math.max(st.high, st.last);
+    st.low = Math.min(st.low, st.last);
+    const qty = Math.floor(100 + Math.random()*3000);
+    st.vol += qty;
+    st.history.push(st.last + (Math.random()-0.5)*0.2);
+    if (st.history.length>420) st.history.shift();
+    const o = st.history[Math.max(0, st.history.length-300)];
+    st.change = +(st.last - o).toFixed(2);
+    st.changePct = st.change / o;
+    updateRow(s.sym);
+    if (Math.random()<0.14 && s.sym===currentSym) pushTape(s.sym, st.last, qty);
+  }
+
+  // 重繪 & 刷新
+  updateQuoteBar();
+  drawMarket();
+  drawStockChart();
+  renderBook(currentSym); // 讓五檔跳動
+}
+
+window.addEventListener("resize", ()=>{ drawMarket(); drawStockChart(); });
+
+// ====== 啟動 ======
+renderTable();
+selectSymbol(currentSym);
+drawMarket();
+drawStockChart();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
